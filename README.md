@@ -21,7 +21,7 @@ That's all!
 
 ## Wiring
 
-<img src="images/wiring.jpg" alt="wiring" style="zoom:50%;" />
+<img src="images/easypower_wiring.jpg" alt="wiring" style="zoom:50%;" />
 
 ## Firmware
 
@@ -54,7 +54,7 @@ Finally, you can connect the load device which want to be measured, for example 
 
 You can use MQTT Explorer to monitor data trends across measurements, just selecting the topic `easypower/metrics`, then using "Add to chart panel" in the Value panel, aha, a data trend chart apperaed:
 
-<img src="images/data_trends.jpg" alt="data_trends" style="zoom:50%;" />
+<img src="images/easypower_monitor.jpg" alt="data_trends" style="zoom:50%;" />
 
 ## License
 
