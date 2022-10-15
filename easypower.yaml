@@ -1,0 +1,119 @@
+esphome:
+  name: easypower
+
+esp8266:
+  board: nodemcuv2
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: ""
+  reboot_timeout: 0s
+
+ota:
+  password: ""
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "EasyPower Config"
+    password: "12345678"
+
+captive_portal:
+
+font:
+  - id: fbody
+    file: Menlo-Regular.ttf
+    size: 12
+
+i2c:
+  scl: D1
+  sda: D2
+  frequency: 800kHz
+
+globals:
+  - id: work_time
+    type: long
+    initial_value: '0'
+  - id: capacity  # 使用电量，单位 mWh
+    type: float
+    initial_value: '0'
+
+mqtt:
+  broker: !secret mqtt_broker
+  topic_prefix: "easypower"
+  log_topic:
+    topic: debug
+    level: NONE
+
+sensor:
+  - platform: uptime
+    name: Uptime Sensor
+    id: uptime_sensor
+    update_interval: 1s
+  - platform: ina219
+    address: 0x40
+    shunt_resistance: 0.1 ohm
+    current:
+      name: "INA219 Current"
+      id: ina_cur
+      on_value:
+        then:
+          - lambda: |-
+              static long last_time = 0;
+              if (last_time == 0) {
+                last_time = millis();
+                return;
+              }
+              long duration = millis() - last_time;
+              last_time = millis();
+              float cur = id(ina_cur).state * 1000.0;
+              float volt = floor(id(ina_bus).state * 100) / 100.0;
+              float power = volt * cur;
+              if (volt == 0 || fabs(cur) < 2.0) {
+                return;
+              }
+              float cap = volt * cur * duration / 1000.0 / 3600.0;
+              id(capacity) += cap;
+              id(work_time) += duration;
+          - if:
+              condition:
+                lambda: 'return fabs(id(ina_cur).state * 1000.0) >= 2.0;'
+              then:
+                - mqtt.publish_json:
+                    topic: easypower/metrics
+                    payload: |-
+                      root["current"] = id(ina_cur).state * 1000.0;
+                      root["voltage"] = floor(id(ina_bus).state * 100) / 100.0;
+                      root["power"] = id(ina_cur).state * 1000.0 * id(ina_bus).state;
+                      root["capacity"] = id(capacity);
+                      root["work_time"] = id(work_time);
+    power:
+      name: "INA219 Power"
+      id: ina_power
+    bus_voltage:
+      name: "INA219 Bus Voltage"
+      id: ina_bus
+    shunt_voltage:
+      name: "INA219 Shunt Voltage"
+      id: ina_shunt
+    max_voltage: 32.0V
+    max_current: 3.2A
+    update_interval: 100ms
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    rotation: 180
+    address: 0x3C
+    update_interval: 100ms
+    lambda: |-
+      it.printf(0, 0, id(fbody), "%0.2f V %*.0f mA", id(ina_bus).state, 4, id(ina_cur).state * 1000.0);
+      it.printf(0, 16, id(fbody), "Power: %0.3f W", id(ina_power).state);
+      it.printf(0, 32, id(fbody), "Cap: %0.3f mWh", id(capacity));
+      it.printf(0, 48, id(fbody), "Work: %0.0fs", id(work_time) / 1000.0);
